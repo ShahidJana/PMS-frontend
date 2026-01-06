@@ -3,6 +3,8 @@ import api from '../utils/api';
 import { useAuth } from '../context/AuthContext';
 import { Calendar, Briefcase, CheckCircle2, Layout } from 'lucide-react';
 
+import LoadingSpinner from '../components/LoadingSpinner';
+
 export default function TeamDashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState(null);
@@ -15,7 +17,7 @@ export default function TeamDashboard() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <div className="p-8 text-center text-slate-500 italic">Loading your personalized dashboard...</div>;
+  if (loading) return <LoadingSpinner fullScreen text="Loading your workspace..." />;
   if (!stats) return <div className="p-8 text-center text-red-500">Error loading dashboard</div>;
 
   return (

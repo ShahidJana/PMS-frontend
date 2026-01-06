@@ -1,6 +1,6 @@
-/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import api from '../utils/api';
+import LoadingSpinner from '../components/LoadingSpinner';
 
 const AuthContext = createContext(null);
 
@@ -66,9 +66,11 @@ export function AuthProvider({ children }) {
 
   const value = { user, login, logout, register, loading };
 
+  if (loading) return <LoadingSpinner fullScreen text="Verifying session..." />;
+
   return (
     <AuthContext.Provider value={value}>
-      {!loading && children}
+      {children}
     </AuthContext.Provider>
   );
 }

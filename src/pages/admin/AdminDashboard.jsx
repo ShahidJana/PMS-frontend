@@ -2,21 +2,22 @@ import React, { useEffect, useState, useCallback } from "react";
 import api from "../../utils/api";
 import {
   Users,
-  Briefcase,
-  CheckSquare,
-  Activity,
+  FolderTree,
+  ClipboardList,
+  ClipboardPenLine,
+  ClipboardCheck,
   Layout,
-  Clock,
-  ChevronRight,
   Edit2,
   Trash2,
   X,
-  Shield,
   Mail,
   User as UserIcon,
-  Octagon,
-  Plus, // Added Plus icon
-  User, // Added User icon
+  Plus,
+  User,
+  Ban,
+  Lock,
+  Unlock,
+  SquarePen
 } from "lucide-react";
 import Kanban from "../../components/Kanban";
 
@@ -24,6 +25,8 @@ import StatsCard from "../../components/StatsCard";
 import ProjectCard from "../../components/ProjectCard";
 import ProjectModal from "../../components/ProjectModal";
 import ActivityLog from "../../components/ActivityLog";
+import LoadingSpinner from "../../components/LoadingSpinner";
+import { toast } from 'react-hot-toast';
 
 export default function AdminDashboard() {
   const [stats, setStats] = useState(null);
@@ -50,7 +53,8 @@ export default function AdminDashboard() {
     try {
       const res = await api.get("/dashboard/overview");
       setStats(res.data);
-      console.log("stats Activity log", res.data?.recentActivity);
+      console.log("stats AdminDashboard", res.data);
+      // console.log("stats Activity log", res.data?.recentActivity);
     } catch (e) {
       console.error(e);
     } finally {
@@ -93,10 +97,12 @@ export default function AdminDashboard() {
 
       closeModal();
       setProjectsKey(prev => prev + 1);
+      setProjectsKey(prev => prev + 1);
       fetchStats();
+      toast.success(editingProject ? 'Project updated successfully' : 'Project created successfully');
     } catch (e) {
       console.error(e);
-      alert("Failed to save project");
+      toast.error("Failed to save project");
     }
   };
 
@@ -135,9 +141,29 @@ export default function AdminDashboard() {
       await api.delete(`/projects/${id}`);
       setProjectsKey(prev => prev + 1);
       fetchStats();
+      toast.success('Project deleted successfully');
     } catch (e) {
       console.error(e);
-      alert("Failed to delete project");
+      toast.error("Failed to delete project");
+    }
+  };
+
+  const handleToggleStatus = async (project) => {
+    // Validation: Cannot complete if tasks are pending
+    if (project.status !== 'completed' && project.totalTasks > 0 && project.progress < 100) {
+      toast.error("Cannot mark as completed: Project has pending tasks.");
+      return;
+    }
+
+    const newStatus = project.status === 'completed' ? 'active' : 'completed';
+    try {
+      await api.patch(`/projects/${project._id}`, { status: newStatus });
+      setProjectsKey(prev => prev + 1);
+      fetchStats();
+      toast.success(newStatus === 'completed' ? 'Project marked as completed' : 'Project reactivated');
+    } catch (e) {
+      console.error(e);
+      toast.error('Failed to update status');
     }
   };
 
@@ -160,9 +186,30 @@ export default function AdminDashboard() {
       setAllUsers((prev) =>
         prev.map((u) => (u._id === userId ? { ...u, role: newRole } : u))
       );
+      toast.success(`User role updated to ${newRole}`);
     } catch (e) {
       console.error(e);
-      alert("Failed to update role");
+      toast.error("Failed to update role");
+    }
+  };
+
+  const handleToggleBlock = async (user) => {
+    if (user.role === 'admin') {
+      toast.error("Administrators cannot be blocked.");
+      return;
+    }
+    const action = user.blocked ? 'unblock' : 'block';
+    if (!window.confirm(`Are you sure you want to ${action} this user?`)) return;
+
+    try {
+      await api.post(`/users/${user._id}/block`, { blocked: !user.blocked });
+      setAllUsers((prev) =>
+        prev.map((u) => (u._id === user._id ? { ...u, blocked: !user.blocked } : u))
+      );
+      toast.success(`User ${user.blocked ? 'unblocked' : 'blocked'} successfully`);
+    } catch (e) {
+      console.error(e);
+      toast.error(`Failed to ${action} user`);
     }
   };
 
@@ -177,9 +224,10 @@ export default function AdminDashboard() {
       await api.delete(`/users/${userId}`);
       setAllUsers((prev) => prev.filter((u) => u._id !== userId));
       fetchStats();
+      toast.success('User deleted successfully');
     } catch (e) {
       console.error(e);
-      alert("Failed to delete user");
+      toast.error("Failed to delete user");
     }
   };
 
@@ -199,18 +247,15 @@ export default function AdminDashboard() {
         prev.map((u) => (u._id === editingUser._id ? res.data : u))
       );
       setEditingUser(null);
+      toast.success('User updated successfully');
     } catch (e) {
       console.error(e);
-      alert("Failed to update user");
+      toast.error("Failed to update user");
     }
   };
 
   if (loading)
-    return (
-      <div className="p-8 text-center text-slate-500">
-        Loading admin overview...
-      </div>
-    );
+    return <LoadingSpinner fullScreen text="Loading dashboard..." />;
   if (!stats)
     return (
       <div className="p-8 text-center text-red-500">Error loading stats</div>
@@ -218,28 +263,44 @@ export default function AdminDashboard() {
 
   const cards = [
     {
-      title: "Total Users",
-      value: stats.totalUsers,
-      icon: <Users size={24} />,
+      title: "Users",
+      value: stats.totalUsers != null
+        ? `${stats.totalUsers < 10 ? '0' : ''}${stats.totalUsers}`
+        : '0',
+      icon: <Users size={24} strokeWidth={2.5} />,
       color: "bg-blue-500",
     },
     {
-      title: "Total Projects",
-      value: stats.totalProjects,
-      icon: <Briefcase size={24} />,
+      title: "Projects",
+      value: stats.totalProjects != null
+        ? `${stats.totalProjects < 10 ? '0' : ''}${stats.totalProjects}`
+        : '0',
+      icon: <FolderTree size={24} strokeWidth={2.5} />,
       color: "bg-emerald-500",
     },
     {
-      title: "Total Tasks",
-      value: stats.totalTasks,
-      icon: <CheckSquare size={24} />,
+      title: "Tasks",
+      value: stats.totalTasks != null
+        ? `${stats.totalTasks < 10 ? '0' : ''}${stats.totalTasks}`
+        : '0',
+      icon: <ClipboardList size={24} strokeWidth={2.5} />,
       color: "bg-indigo-500",
     },
     {
-      title: "Blocked Tasks",
-      value: stats.blockedTasks,
-      icon: <Octagon size={24} />,
-      color: "bg-red-500",
+      title: "Active Tasks",
+      value: stats.activeTasks != null
+        ? `${stats.activeTasks < 10 ? '0' : ''}${stats.activeTasks}`
+        : '0',
+      icon: <ClipboardPenLine size={24} strokeWidth={2.5} />,
+      color: "bg-orange-500",
+    },
+    {
+      title: "Completed Tasks",
+      value: stats.completedTasks != null
+        ? `${stats.completedTasks < 10 ? '0' : ''}${stats.completedTasks}`
+        : '0',
+      icon: <ClipboardCheck size={24} strokeWidth={2.5} />,
+      color: "bg-emerald-500",
     },
   ];
 
@@ -247,8 +308,7 @@ export default function AdminDashboard() {
     <div className="w-full min-h-screen overflow-x-hidden p-4 md:p-2 lg:p-4 space-y-6 animate-in fade-in duration-700">
       <div className="flex items-center justify-between">
         <h2 className="text-3xl font-bold text-slate-800 dark:text-white">
-          Admin Overview
-        </h2>
+          Admin Dashboard        </h2>
         <div className="flex gap-4">
           <button
             onClick={() => setShowModal(true)}
@@ -295,14 +355,14 @@ export default function AdminDashboard() {
                 onClick={() => setShowUserModal(false)}
                 className="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-full transition-colors"
               >
-                <X size={20} className="text-slate-400" />
+                <X size={20} className="text-slate-400 hover:text-red-500" />
               </button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-6">
               {loadingUsers ? (
-                <div className="py-20 text-center text-slate-400 italic">
-                  Synchronizing user directory...
+                <div className="py-20 flex justify-center">
+                  <LoadingSpinner text="Synchronizing user directory..." />
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -319,12 +379,12 @@ export default function AdminDashboard() {
                       {allUsers.map((u) => (
                         <tr
                           key={u._id}
-                          className="group hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors"
+                          className={`group hover:bg-slate-50/50 dark:hover:bg-slate-700/20 transition-colors ${u.blocked ? 'opacity-60 bg-red-50/50 dark:bg-red-900/10' : ''}`}
                         >
                           <td className="py-4 px-2">
                             <div className="flex items-center gap-3">
-                              <div className="w-8 h-8 rounded-full bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400 flex items-center justify-center font-bold text-xs">
-                                {u.name.charAt(0)}
+                              <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs ${u.blocked ? 'bg-red-100 dark:bg-red-900/40 text-red-600 dark:text-red-400' : 'bg-indigo-100 dark:bg-indigo-900/40 text-indigo-600 dark:text-indigo-400'}`}>
+                                {u.blocked ? <Ban size={14} /> : u.name.charAt(0)}
                               </div>
                               <div>
                                 {editingUser?._id === u._id ? (
@@ -374,8 +434,9 @@ export default function AdminDashboard() {
                                   </div>
                                 ) : (
                                   <>
-                                    <p className="text-sm font-bold text-slate-700 dark:text-white leading-none">
+                                    <p className="text-sm font-bold text-slate-700 dark:text-white leading-none flex items-center gap-2">
                                       {u.name}
+                                      {u.blocked && <span className="text-[10px] bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 px-1.5 py-0.5 rounded font-bold uppercase tracking-wider">Blocked</span>}
                                     </p>
                                     <p className="text-xs text-slate-400 mt-1">
                                       {u.email}
@@ -403,12 +464,21 @@ export default function AdminDashboard() {
                           </td>
                           <td className="py-4 px-2 text-right">
                             <div className="flex justify-end gap-2">
+                              {u.role !== 'admin' && (
+                                <button
+                                  onClick={() => handleToggleBlock(u)}
+                                  className={`p-1.5 rounded-lg transition-all ${u.blocked ? 'text-amber-500 hover:bg-amber-50 dark:hover:bg-amber-900/30' : 'text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30'}`}
+                                  title={u.blocked ? "Unblock User" : "Block User"}
+                                >
+                                  {u.blocked ? <Unlock size={14} /> : <Lock size={14} />}
+                                </button>
+                              )}
                               <button
                                 onClick={() => handleEditUser(u)}
                                 className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 dark:hover:bg-indigo-900/30 rounded-lg transition-all"
                                 title="Edit User"
                               >
-                                <Edit2 size={14} />
+                                <SquarePen size={14} />
                               </button>
                               {u.role !== "admin" && (
                                 <button
@@ -442,7 +512,7 @@ export default function AdminDashboard() {
       )}
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-6 gap-4">
         {cards.map((card, i) => (
           <StatsCard key={i} {...card} />
         ))}
@@ -451,9 +521,9 @@ export default function AdminDashboard() {
       {/* Projects List Grid Section */}
       <div className="space-y-4">
         <div className="flex items-center gap-2 tracking-tight">
-          <Layout size={20} className="text-emerald-500" />
-          <h3 className="text-xl font-bold text-slate-800 dark:text-slate-100">
-            Project Portfolio
+          <Layout size={20} strokeWidth={2.5} className="text-emerald-500" />
+          <h3 className="text-2xl font-bold text-slate-800 dark:text-slate-100">
+            Project Workspace
           </h3>
         </div>
 
@@ -464,6 +534,7 @@ export default function AdminDashboard() {
               project={project}
               onEdit={handleEditClick}
               onDelete={handleDeleteProject}
+              onStatusToggle={handleToggleStatus}
             />
           ))}
           {(!stats.projects || stats.projects.length === 0) && (
@@ -477,10 +548,10 @@ export default function AdminDashboard() {
       </div>
 
       {/* User Management Console */}
-      <div className="card bg-gradient-to-br from-indigo-600 to-blue-700 text-white border-none flex flex-col sm:flex-row items-center justify-between p-6 gap-4">
+      <div className="card bg-gradient-to-br from-indigo-500 to-blue-600 text-white border-none flex flex-col sm:flex-row items-center justify-between p-6 gap-4">
         <div>
           <div className="flex items-center gap-2 tracking-tight mb-1">
-            <Layout size={20} className="text-emerald-400" />
+            <Users size={20} strokeWidth={2.5} className="text-emerald-400" />
             <h3 className="text-xl font-bold text-white">
               User Management Console
             </h3>

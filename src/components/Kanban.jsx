@@ -3,6 +3,8 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { useAuth } from '../context/AuthContext';
 import { Plus, Trash2, X, Edit2, Check, MessageSquare, Send, ChevronDown, ChevronUp, ListTodo, Clock, CheckCircle2, AlertCircle, User, Users, Calendar, FolderKanban } from 'lucide-react';
 import api from '../utils/api';
+import LoadingSpinner from './LoadingSpinner';
+import { toast } from 'react-hot-toast';
 
 const COL_IDS = ['todo', 'in-progress', 'done', 'blocked'];
 const COL_TITLES = {
@@ -93,19 +95,19 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
         [id]: { id, title: COL_TITLES[id], taskIds: [] }
       }), {});
 
-      tasks.forEach(t => {
-        transformedTasks[t._id] = {
-          id: t._id,
-          content: t.title,
-          assignee: t.assignee,
-          project: t.project,
-          commentsCount: t.commentsCount || 0,
-          hasUnreadComments: t.hasUnreadComments || false,
-          status: t.status,
-          dueDate: t.dueDate
+      tasks.forEach(task => {
+        transformedTasks[task._id] = {
+          id: task._id,
+          content: task.title,
+          assignee: task.assignee,
+          project: task.project,
+          commentsCount: task.commentsCount || 0,
+          hasUnreadComments: task.hasUnreadComments || false,
+          status: task.status,
+          dueDate: task.dueDate
         };
-        const colId = columns[t.status] ? t.status : 'todo';
-        columns[colId].taskIds.push(t._id);
+        const colId = columns[task.status] ? task.status : 'todo';
+        columns[colId].taskIds.push(task._id);
       });
 
       setData({ tasks: transformedTasks, columns, columnOrder: COL_IDS });
@@ -165,7 +167,7 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
       }));
     } catch (e) {
       console.error(e);
-      alert('Failed to add comment');
+      toast.error('Failed to add comment');
     }
   };
 
@@ -179,11 +181,11 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
     const task = data.tasks[draggableId];
 
     if (destination.droppableId === 'in-progress' && !task.assignee) {
-      alert("Please assign an owner to this task before moving it to In Progress!");
+      toast.error("Please assign an owner to this task before moving it to In Progress!");
       return;
     }
     if ((source.droppableId === 'done' || source.droppableId === 'blocked') && user.role !== 'admin') {
-      alert(`Only an Administrator can move tasks out of the ${source.droppableId.toUpperCase()} state!`);
+      toast.error(`Only an Administrator can move tasks out of the ${source.droppableId.toUpperCase()} state!`);
       return;
     }
 
@@ -241,14 +243,14 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
           ...prev.columns,
           [columnId]: {
             ...prev.columns[columnId],
-            taskIds: [...prev.columns[columnId].taskIds, newTask._id]
+            taskIds: [newTask._id, ...prev.columns[columnId].taskIds]
           }
         }
       }));
       setTaskInputs(prev => ({ ...prev, [columnId]: '' }));
       if (onTaskUpdate) onTaskUpdate();
     } catch (e) {
-      alert(e.response?.data?.message || e.message);
+      toast.error(e.response?.data?.message || e.message);
     }
   };
 
@@ -285,7 +287,7 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
       if (onTaskUpdate) onTaskUpdate();
     } catch (e) {
       console.error(e);
-      alert('Failed to save edit');
+      toast.error('Failed to save edit');
     }
   };
 
@@ -302,7 +304,7 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
       if (onTaskUpdate) onTaskUpdate();
     } catch (e) {
       console.error(e);
-      alert('Failed to update due date');
+      toast.error('Failed to update due date');
     }
   };
 
@@ -315,7 +317,7 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
     // Check if task has a due date before assigning
     const task = data.tasks[taskId];
     if (!task.dueDate && userId) {
-      alert("Please set a due date for the task before assigning it to a user.");
+      toast.error("Please set a due date for the task before assigning it to a user.");
       return;
     }
 
@@ -330,7 +332,7 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
       }));
     } catch (e) {
       console.error(e);
-      alert('Assignment failed');
+      toast.error('Assignment failed');
     }
   };
 
@@ -346,14 +348,19 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
     });
   };
 
-  if (loading) return <div className="p-4 text-slate-400 italic">Loading tasks...</div>;
+  if (loading) return <LoadingSpinner text="Loading tasks..." />;
 
   return (
     <div className="w-full h-auto xl:h-[600px] flex flex-col animate-in fade-in duration-500">
       <div className="flex items-center justify-between mb-8 px-2">
-        <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">
-          Kanban Board
-        </h3>
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center shadow-lg shadow-indigo-500/20">
+            <FolderKanban className="text-white" size={24} strokeWidth={2.5} />
+          </div>
+          <h3 className="text-xl font-bold text-slate-800 dark:text-white tracking-tight">
+            Kanban Board
+          </h3>
+        </div>
         {user?.role === 'pm' && (
           <div className="flex items-center gap-2 bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
             <button
@@ -380,7 +387,7 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
             const column = data.columns[columnId];
             const tasks = column.taskIds
               .map(taskId => data.tasks[taskId])
-              .filter(t => !t ? false : (filterMine ? t.assignee?._id === user?.id : true));
+              .filter(task => !task ? false : (filterMine ? task.assignee?._id === user?.id : true));
 
             return (
               <div key={column.id} className="flex flex-col h-[500px] bg-slate-50/10 dark:bg-slate-900/40 rounded-[1rem] border border-slate-300 dark:border-slate-800/50">
@@ -398,6 +405,46 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
                     {tasks.length}
                   </span>
                 </div>
+
+                {/* Add task section */}
+                {isEditable && !filterMine && column.id === 'todo' && (
+                  <div className="px-2 pb-4">
+                    <div className="bg-white dark:bg-slate-800/80 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-sm space-y-3">
+                      <div className="flex flex-col gap-1.5">
+                        <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Assign a project task to an assignee</label>
+                        <div className="relative">
+                          <select
+                            className="w-full text-xs h-10 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all cursor-pointer appearance-none"
+                            value={selectedProjects[column.id] || ''}
+                            onChange={(e) => setSelectedProjects(prev => ({ ...prev, [column.id]: e.target.value }))}
+                          >
+                            {projects.map(project => (
+                              <option key={project._id} value={project._id}>{project.title}</option>
+                            ))}
+                          </select>
+                          <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400">
+                            <ChevronDown size={14} />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex gap-2">
+                        <input
+                          className="flex-1 bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-4 py-2 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all dark:text-white"
+                          placeholder="Add task..."
+                          value={taskInputs[column.id] || ''}
+                          onChange={e => setTaskInputs(prev => ({ ...prev, [column.id]: e.target.value }))}
+                          onKeyDown={e => { if (e.key === 'Enter') addTask(column.id); }}
+                        />
+                        <button
+                          onClick={() => addTask(column.id)}
+                          className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl p-2.5 transition-all shadow-lg shadow-indigo-500/20 active:scale-95 flex items-center justify-center min-w-[40px]"
+                        >
+                          <Plus size={18} />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
 
                 {/* Scrollable Droppable */}
                 <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-indigo-500/50 scrollbar-track-slate-200/20">
@@ -514,7 +561,7 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
                                           </div>
 
                                           {/* Assignee Section */}
-                                          <div className="flex-1 min-w-0">
+                                          <div className="flex-1 min-w-0" title={task.assignee?.name}>
                                             {isEditable ? (
                                               <div className="relative">
                                                 <select
@@ -595,39 +642,6 @@ export default function Kanban({ editable = false, onTaskUpdate }) {
                     )}
                   </Droppable>
                 </div>
-
-                {/* Add task section */}
-                {isEditable && column.id === 'todo' && (
-                  <div className="p-3 bg-white/50 dark:bg-black/5 rounded-b-2xl space-y-3 border-t border-slate-100 dark:border-slate-800">
-                    <div className="flex flex-col gap-1.5">
-                      <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">Assign to Project</label>
-                      <select
-                        className="w-full text-xs h-9 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-2 outline-none focus:ring-2 focus:ring-indigo-500 transition-all cursor-pointer"
-                        value={selectedProjects[column.id] || ''}
-                        onChange={(e) => setSelectedProjects(prev => ({ ...prev, [column.id]: e.target.value }))}
-                      >
-                        {projects.map(p => (
-                          <option key={p._id} value={p._id}>{p.title}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div className="flex gap-2">
-                      <input
-                        className="flex-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-3 py-2 text-xs focus:ring-2 focus:ring-indigo-500 outline-none transition-all dark:text-white"
-                        placeholder="Add task..."
-                        value={taskInputs[column.id] || ''}
-                        onChange={e => setTaskInputs(prev => ({ ...prev, [column.id]: e.target.value }))}
-                        onKeyDown={e => { if (e.key === 'Enter') addTask(column.id); }}
-                      />
-                      <button
-                        onClick={() => addTask(column.id)}
-                        className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg p-2 transition-colors shadow-sm"
-                      >
-                        <Plus size={16} />
-                      </button>
-                    </div>
-                  </div>
-                )}
               </div>
             );
           })}

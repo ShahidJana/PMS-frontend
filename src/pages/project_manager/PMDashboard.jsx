@@ -1,11 +1,20 @@
 import React, { useEffect, useState, useCallback } from "react";
 import api from "../../utils/api";
 import Kanban from "../../components/Kanban";
-import { Layers, CheckCircle, Clock, Activity, Octagon } from "lucide-react";
+import {
+  Layers, CheckCircle, ClipboardList,
+  ClipboardPenLine,
+  ClipboardCheck,
+  Plus,
+} from "lucide-react";
 
 import StatsCard from "../../components/StatsCard";
 import ProjectModal from "../../components/ProjectModal";
 import ActivityLog from "../../components/ActivityLog";
+
+import LoadingSpinner from "../../components/LoadingSpinner";
+
+import { toast } from 'react-hot-toast';
 
 export default function PMDashboard() {
   const [stats, setStats] = useState(null);
@@ -20,7 +29,7 @@ export default function PMDashboard() {
     try {
       const res = await api.get("/dashboard/overview");
       setStats(res.data);
-      console.log('stats', res.data)
+      console.log('stats PMDashboard', res.data)
     } catch (e) {
       console.error(e);
     } finally {
@@ -41,39 +50,50 @@ export default function PMDashboard() {
       setProjDesc("");
       setProjectsKey(prev => prev + 1);
       fetchStats();
+      toast.success('Project created successfully');
     } catch (e) {
       console.error(e);
-      alert("Failed to create project");
+      toast.error("Failed to create project");
     }
   };
 
-  if (loading)
-    return (
-      <div className="p-8 text-center text-slate-500">
-        Syncing project data...
-      </div>
-    );
-  if (!stats)
-    return <div className="p-8 text-center text-red-500">Loading data...</div>;
+  if (loading) return <LoadingSpinner fullScreen text="Syncing project data..." />;
+  if (!stats) return <div className="p-8 text-center text-red-500">Error loading data</div>;
 
   const cards = [
     {
-      title: "My Projects",
-      value: stats.ownedProjects,
+      title: "Projects",
+      value: stats.ownedProjects != null
+        ? `${stats.ownedProjects < 10 ? '0' : ''}${stats.ownedProjects}`
+        : '0',
       icon: <Layers size={22} />,
       color: "bg-indigo-500",
     },
+
+    {
+      title: "Tasks",
+      value: stats.totalTasks != null
+        ? `${stats.totalTasks < 10 ? '0' : ''}${stats.totalTasks}`
+        : '0',
+      icon: <ClipboardList size={22} />,
+      color: "bg-indigo-500",
+    },
+
     {
       title: "Active Tasks",
-      value: stats.activeTasks,
-      icon: <Clock size={22} />,
+      value: stats.activeTasks != null
+        ? `${stats.activeTasks < 10 ? '0' : ''}${stats.activeTasks}`
+        : '0',
+      icon: <ClipboardPenLine size={22} />,
       color: "bg-orange-500",
       subValue: stats.blockedTasks > 0 ? `${stats.blockedTasks} Blocked` : null
     },
     {
       title: "Completed Tasks",
-      value: stats.completedTasks,
-      icon: <CheckCircle size={22} />,
+      value: stats.completedTasks != null
+        ? `${stats.completedTasks < 10 ? '0' : ''}${stats.completedTasks}`
+        : '0',
+      icon: <ClipboardCheck size={22} />,
       color: "bg-emerald-500",
     },
   ];
@@ -89,9 +109,15 @@ export default function PMDashboard() {
             Manage your projects and track team performance
           </p>
         </div>
-        <button onClick={() => setShowModal(true)} className="btn self-start">
-          New Project
-        </button>
+        <div className="flex gap-4">
+          <button
+            onClick={() => setShowModal(true)}
+            className="btn bg-indigo-600 flex items-center gap-2"
+          >
+            <Plus size={18} />
+            New Project
+          </button>
+        </div>
       </div>
 
       <ProjectModal
@@ -102,9 +128,10 @@ export default function PMDashboard() {
         setProjTitle={setProjTitle}
         projDesc={projDesc}
         setProjDesc={setProjDesc}
+
       />
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
         {cards.map((card, i) => (
           <StatsCard key={i} {...card} />
         ))}

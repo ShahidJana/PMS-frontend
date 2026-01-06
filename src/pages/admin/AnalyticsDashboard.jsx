@@ -5,6 +5,8 @@ import {
 } from 'recharts';
 import api from '../../utils/api';
 
+import LoadingSpinner from '../../components/LoadingSpinner';
+
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8'];
 
 export default function AnalyticsDashboard() {
@@ -25,7 +27,7 @@ export default function AnalyticsDashboard() {
         fetchAnalytics();
     }, []);
 
-    if (loading) return <div className="p-4">Loading analytics...</div>;
+    if (loading) return <LoadingSpinner fullScreen text="Loading analytics..." />;
     if (!data) return <div className="p-4">Failed to load data</div>;
 
     console.log("Data Analytics", data);
